@@ -11,6 +11,7 @@
 
 use lettermint::api::email::*;
 use lettermint::reqwest::{LettermintClient, LettermintClientError};
+use lettermint::testing::emails::{self, Scenario};
 use lettermint::{Query, QueryError};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -66,7 +67,7 @@ fn format_api_error(err: &QueryError<LettermintClientError>) -> String {
 async fn send_from_unverified_domain_returns_validation_error() -> Result {
     let err = SendEmailRequest::builder()
         .from("test@unverified-domain-that-does-not-exist.example")
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: unverified domain")
         .text("This should fail with a validation error.")
         .build()
@@ -90,7 +91,7 @@ async fn send_from_unverified_domain_returns_validation_error() -> Result {
 async fn send_text_email_ok() -> Result {
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: text")
         .text("This is a plain text integration test.")
         .build()
@@ -107,7 +108,7 @@ async fn send_text_email_ok() -> Result {
 async fn send_html_email_ok() -> Result {
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: html")
         .html("<h1>Hello</h1><p>HTML integration test.</p>")
         .build()
@@ -124,7 +125,7 @@ async fn send_html_email_ok() -> Result {
 async fn send_html_and_text_email_ok() -> Result {
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: html+text")
         .html("<h1>Hello</h1>")
         .text("Hello")
@@ -144,11 +145,11 @@ async fn send_with_all_options() -> Result {
 
     let resp = SendEmailRequest::builder()
         .from(from.clone())
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: full options")
         .html("<h1>Full test</h1>")
         .text("Full test")
-        .cc(vec!["ok+cc@testing.lettermint.co".into()])
+        .cc(vec![emails::custom("ok+cc")])
         .reply_to(vec![from])
         .tag("integration-test")
         .metadata(std::collections::HashMap::from([(
@@ -179,7 +180,7 @@ async fn send_with_attachment() -> Result {
 
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["ok@testing.lettermint.co".into()])
+        .to(vec![Scenario::Ok.email()])
         .subject("Integration test: attachment")
         .text("See attached file.")
         .attachments(vec![Attachment::new("test.txt", content)])
@@ -194,10 +195,27 @@ async fn send_with_attachment() -> Result {
 
 #[tokio::test]
 #[ignore]
+async fn send_to_random_soft_bounce() -> Result {
+    let resp = SendEmailRequest::builder()
+        .from(sender())
+        .to(vec![Scenario::SoftBounce.random()])
+        .subject("Integration test: random soft bounce")
+        .text("This should soft bounce with a unique address.")
+        .build()
+        .execute(&client())
+        .await
+        .map_err(|e| format_api_error(&e))?;
+
+    assert!(!resp.message_id.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore]
 async fn send_to_soft_bounce() -> Result {
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["softbounce@testing.lettermint.co".into()])
+        .to(vec![Scenario::SoftBounce.email()])
         .subject("Integration test: soft bounce")
         .text("This should soft bounce.")
         .build()
@@ -214,7 +232,7 @@ async fn send_to_soft_bounce() -> Result {
 async fn send_to_hard_bounce() -> Result {
     let resp = SendEmailRequest::builder()
         .from(sender())
-        .to(vec!["hardbounce@testing.lettermint.co".into()])
+        .to(vec![Scenario::HardBounce.email()])
         .subject("Integration test: hard bounce")
         .text("This should hard bounce.")
         .build()
@@ -234,13 +252,13 @@ async fn batch_send_ok() -> Result {
     let batch = BatchSendRequest::new(vec![
         SendEmailRequest::builder()
             .from(from.clone())
-            .to(vec!["ok@testing.lettermint.co".into()])
+            .to(vec![Scenario::Ok.email()])
             .subject("Integration test: batch 1/2")
             .text("First email in batch.")
             .build(),
         SendEmailRequest::builder()
             .from(from)
-            .to(vec!["ok@testing.lettermint.co".into()])
+            .to(vec![Scenario::Ok.email()])
             .subject("Integration test: batch 2/2")
             .text("Second email in batch.")
             .build(),
@@ -274,7 +292,7 @@ async fn batch_send_with_idempotency_key() -> Result {
     let batch = BatchSendRequest::new(vec![
         SendEmailRequest::builder()
             .from(from)
-            .to(vec!["ok@testing.lettermint.co".into()])
+            .to(vec![Scenario::Ok.email()])
             .subject("Integration test: batch idempotency")
             .text("Batch with idempotency key.")
             .build(),

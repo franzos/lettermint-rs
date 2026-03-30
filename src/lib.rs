@@ -31,6 +31,7 @@ pub const LETTERMINT_API_URL: &str = "https://api.lettermint.co/v1/";
 
 pub mod api;
 mod client;
+pub mod testing;
 pub mod webhook;
 
 pub use client::*;

@@ -7,8 +7,9 @@ homepage = "https://github.com/franzos/lettermint-rs"
 documentation = "https://docs.rs/lettermint"
 keywords = ["lettermint", "email", "e-mail", "http"]
 categories = ["api-bindings", "email", "web-programming::http-client"]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
+exclude = ["manifest.scm"]
 
 [dependencies]
 bytes = { version = "1.6" }

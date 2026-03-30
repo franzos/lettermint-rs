@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `testing::emails` module with `Scenario` enum for CI/testing email addresses
+- `Scenario::email()` for base addresses, `Scenario::random()` for unique addresses
+- `emails::custom()` for arbitrary local parts
+
 ## [0.2.0] - 2026-03-27
 
 ### Changed

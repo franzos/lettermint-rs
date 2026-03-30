@@ -173,7 +173,52 @@ match req.execute(&client).await {
 | `reqwest-native-tls` | no | reqwest with native TLS |
 | `reqwest-rustls` | no | reqwest with rustls TLS |
 
-To use your own HTTP client, implement the `Client` trait and skip the reqwest features entirely.
+To use your own HTTP client, implement the `Client` trait and skip the reqwest features entirely — useful if you need a different reqwest version, or a different HTTP client like `ureq` or `hyper`.
+
+### Custom HTTP client example
+
+```rust
+use bytes::Bytes;
+use http::{Request, Response};
+use lettermint::Client;
+
+struct MyClient {
+    api_token: String,
+    http: reqwest::Client, // any version
+}
+
+#[derive(Debug, thiserror::Error)]
+enum MyClientError {
+    #[error("http: {0}")]
+    Http(#[from] http::Error),
+    #[error("request: {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("header: {0}")]
+    Header(#[from] http::header::InvalidHeaderValue),
+}
+
+impl Client for MyClient {
+    type Error = MyClientError;
+
+    async fn execute(&self, mut req: Request<Bytes>) -> Result<Response<Bytes>, Self::Error> {
+        req.headers_mut()
+            .append("x-lettermint-token", self.api_token.as_str().try_into()?);
+
+        let base = "https://api.lettermint.co/v1";
+        let path = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("");
+        *req.uri_mut() = format!("{base}/{}", path.trim_start_matches('/')).parse().unwrap();
+
+        let rr: reqwest::Request = req.try_into()?;
+        let rsp = self.http.execute(rr).await?;
+
+        let mut builder = Response::builder().status(rsp.status());
+        for (k, v) in rsp.headers() {
+            builder.headers_mut().unwrap().insert(k, v.clone());
+        }
+        Ok(builder.body(rsp.bytes().await?)?)
+    }
+}
+```
 
 ## Testing
 
@@ -183,9 +228,29 @@ Unit tests:
 cargo test --all-features
 ```
 
+### Test email addresses
+
+The `testing::emails` module provides [Lettermint test addresses](https://lettermint.co/docs/platform/emails/sending-test-emails) that simulate delivery scenarios without affecting quotas or bounce rates:
+
+```rust
+use lettermint::testing::emails::{self, Scenario};
+
+// Fixed addresses for each scenario
+let ok = Scenario::Ok.email();            // ok@testing.lettermint.co
+let bounce = Scenario::HardBounce.email(); // hardbounce@testing.lettermint.co
+
+// Unique addresses for CI
+let unique = Scenario::SoftBounce.random(); // softbounce+{unique}@testing.lettermint.co
+
+// Custom local part
+let tagged = emails::custom("ok+ci");      // ok+ci@testing.lettermint.co
+```
+
+Available scenarios: `Ok`, `SoftBounce`, `HardBounce`, `SpamComplaint`, `Dsn`.
+
 ### Integration tests
 
-Integration tests hit the live Lettermint API using [test addresses](https://lettermint.co/docs/platform/emails/sending-test-emails) that don't count toward quotas:
+Integration tests hit the live Lettermint API using test addresses that don't count toward quotas:
 
 ```sh
 LETTERMINT_API_TOKEN=your-token \
