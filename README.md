@@ -119,7 +119,7 @@ use lettermint::Query;
 
 async fn ping(client: &LettermintClient) {
     let resp = PingRequest.execute(client).await.unwrap();
-    println!("API status: {}", resp.status);
+    println!("API says: {}", resp.message);
 }
 ```
 
@@ -128,7 +128,7 @@ async fn ping(client: &LettermintClient) {
 ```rust
 use lettermint::webhook::Webhook;
 
-let wh = Webhook::new("whsec_your_webhook_secret");
+let wh = Webhook::new("whsec_your_webhook_secret").unwrap();
 
 // Simple verification — returns parsed JSON payload
 let payload = wh.verify(raw_body, signature_header).unwrap();

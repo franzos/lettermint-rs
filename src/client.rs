@@ -23,6 +23,10 @@ pub trait Endpoint {
     fn extra_headers(&self) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
         vec![]
     }
+    /// Parse the response body. Override for non-JSON responses.
+    fn parse_response(&self, body: &[u8]) -> Result<Self::Response, serde_json::Error> {
+        serde_json::from_slice(body)
+    }
 }
 
 /// A trait which represents an asynchronous query which may be made to a Lettermint client.
@@ -34,6 +38,7 @@ pub trait Query<C> {
 
 /// An error thrown by the [`Query`] trait.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum QueryError<E>
 where
     E: Error + Send + Sync + 'static,
@@ -41,11 +46,11 @@ where
     #[error("client error: {}", source)]
     Client { source: E },
 
+    #[error("failed to serialize request body: {}", source)]
+    SerializeBody { source: serde_json::Error },
+
     #[error("could not parse JSON response: {}", source)]
-    Json {
-        #[from]
-        source: serde_json::Error,
-    },
+    DeserializeResponse { source: serde_json::Error },
 
     #[error("failed to build request: {}", source)]
     Body {
@@ -106,68 +111,103 @@ where
     async fn execute(self, client: &C) -> Self::Result {
         let method = self.method();
         let endpoint = self.endpoint();
-        // Ensure the path starts with '/' so http::Uri parses it as a valid path.
-        let uri = if endpoint.starts_with('/') {
-            endpoint.into_owned()
-        } else {
-            format!("/{endpoint}")
-        };
-        let mut req_builder = http::Request::builder()
-            .method(method.clone())
-            .uri(uri)
-            .header("Accept", "application/json");
 
-        for (name, value) in self.extra_headers() {
-            req_builder = req_builder.header(name.as_ref(), value.as_ref());
-        }
+        #[cfg(feature = "tracing")]
+        let span = tracing::debug_span!(
+            "lettermint.request",
+            method = %method,
+            endpoint = %endpoint,
+            status = tracing::field::Empty,
+        );
 
-        let body = match method {
-            http::Method::GET | http::Method::DELETE | http::Method::HEAD => Bytes::new(),
-            _ => {
-                req_builder = req_builder.header("Content-Type", "application/json");
-                serde_json::to_vec(self.body())?.into()
+        let fut = async move {
+            // Ensure the path starts with '/' so http::Uri parses it as a valid path.
+            let uri = if endpoint.starts_with('/') {
+                endpoint.into_owned()
+            } else {
+                format!("/{endpoint}")
+            };
+            let mut req_builder = http::Request::builder()
+                .method(method.clone())
+                .uri(uri)
+                .header("Accept", "application/json");
+
+            for (name, value) in self.extra_headers() {
+                req_builder = req_builder.header(name.as_ref(), value.as_ref());
             }
-        };
 
-        let http_req = req_builder.body(body)?;
-        let response = client.execute(http_req).await.map_err(QueryError::client)?;
+            let body = match method {
+                http::Method::GET | http::Method::DELETE | http::Method::HEAD => Bytes::new(),
+                _ => {
+                    req_builder = req_builder.header("Content-Type", "application/json");
+                    serde_json::to_vec(self.body())
+                        .map_err(|e| QueryError::SerializeBody { source: e })?
+                        .into()
+                }
+            };
 
-        if !response.status().is_success() {
-            #[derive(serde::Deserialize)]
-            struct LettermintErrorBody {
-                error_type: Option<String>,
-                error: Option<String>,
-                message: Option<String>,
-                errors: Option<std::collections::HashMap<String, Vec<String>>>,
-            }
+            let http_req = req_builder.body(body)?;
+            let response = client.execute(http_req).await.map_err(QueryError::client)?;
 
             let status = response.status();
-            let body = response.body().clone();
-            let parsed = serde_json::from_slice::<LettermintErrorBody>(&body).ok();
-            let error_type = parsed
-                .as_ref()
-                .and_then(|p| p.error_type.clone().or_else(|| p.error.clone()));
-            let message = parsed.as_ref().and_then(|p| p.message.clone());
+            #[cfg(feature = "tracing")]
+            tracing::Span::current().record("status", status.as_u16());
 
-            return Err(match status.as_u16() {
-                422 => QueryError::Validation {
-                    error_type,
-                    message,
-                    errors: parsed.and_then(|p| p.errors),
-                    body,
-                },
-                401 | 403 => QueryError::Authentication { message, body },
-                429 => QueryError::RateLimit { message, body },
-                _ => QueryError::Api {
-                    status,
-                    error_type,
-                    message,
-                    body,
-                },
-            });
+            if !status.is_success() {
+                #[derive(serde::Deserialize)]
+                struct LettermintErrorBody {
+                    error_type: Option<String>,
+                    error: Option<String>,
+                    message: Option<String>,
+                    errors: Option<std::collections::HashMap<String, Vec<String>>>,
+                }
+
+                let body = response.body().clone();
+                let parsed = serde_json::from_slice::<LettermintErrorBody>(&body).ok();
+                let error_type = parsed
+                    .as_ref()
+                    .and_then(|p| p.error_type.clone().or_else(|| p.error.clone()));
+                let message = parsed.as_ref().and_then(|p| p.message.clone());
+
+                #[cfg(feature = "tracing")]
+                tracing::warn!(
+                    status = status.as_u16(),
+                    error_type = error_type.as_deref(),
+                    message = message.as_deref(),
+                    "API error response",
+                );
+
+                return Err(match status.as_u16() {
+                    422 => QueryError::Validation {
+                        error_type,
+                        message,
+                        errors: parsed.and_then(|p| p.errors),
+                        body,
+                    },
+                    401 | 403 => QueryError::Authentication { message, body },
+                    429 => QueryError::RateLimit { message, body },
+                    _ => QueryError::Api {
+                        status,
+                        error_type,
+                        message,
+                        body,
+                    },
+                });
+            }
+
+            self.parse_response(response.body())
+                .map_err(|e| QueryError::DeserializeResponse { source: e })
+        };
+
+        #[cfg(feature = "tracing")]
+        {
+            use tracing::Instrument;
+            fut.instrument(span).await
         }
-
-        Ok(serde_json::from_slice(response.body())?)
+        #[cfg(not(feature = "tracing"))]
+        {
+            fut.await
+        }
     }
 }
 
@@ -447,14 +487,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn success_with_invalid_json_returns_json_error() {
+    async fn success_with_invalid_json_returns_deserialize_error() {
         let client = MockClient::ok(b"not json");
         let err = PostEndpoint::new()
             .execute(&client)
             .await
             .expect_err("should fail");
 
-        assert!(matches!(err, QueryError::Json { .. }));
+        assert!(matches!(err, QueryError::DeserializeResponse { .. }));
     }
 
     #[tokio::test]

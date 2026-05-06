@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-06
+
+### Added
+- Optional `tracing` feature: spans for API requests, HTTP transport, and webhook verification
+- `Endpoint::parse_response()` for endpoints with non-JSON responses
+- `BatchError` enum (`Empty`, `TooLarge`) for batch construction
+- `WebhookError::EmptySecret` variant
+- `EmailStatus::Unknown` catch-all (`#[serde(other)]`) for forward compatibility
+- `#[non_exhaustive]` on `QueryError` and `EmailStatus`
+- `wiremock`-based contract tests in `tests/mock.rs` covering header/body shape and untriggerable error paths (403/429/500/502)
+
+### Changed
+- `PingResponse` field `status: u16` → `message: String` (the API returns plain-text `"pong"`)
+- `QueryError::Json` split into `SerializeBody` and `DeserializeResponse`
+- `Webhook::new` and `Webhook::with_tolerance` now return `Result<Self, WebhookError>` instead of panicking
+- `BatchSendRequest::new` returns `Result<Self, BatchError>` instead of `Option<Self>`
+
 ## [0.2.2] - 2026-04-10
 
 ### Added

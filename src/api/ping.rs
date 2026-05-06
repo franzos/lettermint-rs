@@ -7,7 +7,6 @@ use std::borrow::Cow;
 /// ```
 /// # use lettermint::api::ping::PingRequest;
 /// let req = PingRequest;
-/// // resp will be PingResponse { status: 200 }
 /// ```
 pub struct PingRequest;
 
@@ -17,9 +16,8 @@ pub struct EmptyBody;
 
 /// Response from the ping endpoint.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(transparent)]
 pub struct PingResponse {
-    pub status: u16,
+    pub message: String,
 }
 
 impl Endpoint for PingRequest {
@@ -38,6 +36,11 @@ impl Endpoint for PingRequest {
     fn method(&self) -> http::Method {
         http::Method::GET
     }
+
+    fn parse_response(&self, body: &[u8]) -> Result<Self::Response, serde_json::Error> {
+        let message = String::from_utf8_lossy(body).trim().to_owned();
+        Ok(PingResponse { message })
+    }
 }
 
 #[cfg(test)]
@@ -52,8 +55,14 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_response() {
-        let resp: PingResponse = serde_json::from_str("200").unwrap();
-        assert_eq!(resp.status, 200);
+    fn parse_response_from_plain_text() {
+        let resp = PingRequest.parse_response(b"pong").unwrap();
+        assert_eq!(resp.message, "pong");
+    }
+
+    #[test]
+    fn parse_response_trims_whitespace() {
+        let resp = PingRequest.parse_response(b"pong\n").unwrap();
+        assert_eq!(resp.message, "pong");
     }
 }

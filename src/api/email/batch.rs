@@ -1,8 +1,18 @@
 use crate::Endpoint;
 use serde::Serialize;
 use std::borrow::Cow;
+use thiserror::Error;
 
 use super::{SendEmailRequest, SendEmailResponse};
+
+/// Error returned when constructing a [`BatchSendRequest`].
+#[derive(Debug, Error)]
+pub enum BatchError {
+    #[error("batch must contain at least one email")]
+    Empty,
+    #[error("batch exceeds maximum size of {max} (got {actual})")]
+    TooLarge { max: usize, actual: usize },
+}
 
 /// Send up to 500 emails in a single batch request.
 ///
@@ -23,7 +33,7 @@ use super::{SendEmailRequest, SendEmailResponse};
 ///         .build(),
 /// ];
 ///
-/// let batch = BatchSendRequest::new(emails).unwrap();
+/// let batch = BatchSendRequest::new(emails).expect("batch must be 1-500 emails");
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -39,12 +49,18 @@ pub const BATCH_MAX_SIZE: usize = 500;
 impl BatchSendRequest {
     /// Create a new batch request.
     ///
-    /// Returns `None` if `emails` is empty or exceeds 500 entries.
-    pub fn new(emails: Vec<SendEmailRequest>) -> Option<Self> {
-        if emails.is_empty() || emails.len() > BATCH_MAX_SIZE {
-            return None;
+    /// Errors if `emails` is empty or exceeds [`BATCH_MAX_SIZE`] (500).
+    pub fn new(emails: Vec<SendEmailRequest>) -> Result<Self, BatchError> {
+        if emails.is_empty() {
+            return Err(BatchError::Empty);
         }
-        Some(Self {
+        if emails.len() > BATCH_MAX_SIZE {
+            return Err(BatchError::TooLarge {
+                max: BATCH_MAX_SIZE,
+                actual: emails.len(),
+            });
+        }
+        Ok(Self {
             emails,
             idempotency_key: None,
         })
@@ -104,7 +120,10 @@ mod tests {
 
     #[test]
     fn new_rejects_empty() {
-        assert!(BatchSendRequest::new(vec![]).is_none());
+        assert!(matches!(
+            BatchSendRequest::new(vec![]),
+            Err(BatchError::Empty)
+        ));
     }
 
     #[test]
@@ -112,7 +131,13 @@ mod tests {
         let emails: Vec<_> = (0..501)
             .map(|i| minimal_email(&format!("user{i}@example.com")))
             .collect();
-        assert!(BatchSendRequest::new(emails).is_none());
+        assert!(matches!(
+            BatchSendRequest::new(emails),
+            Err(BatchError::TooLarge {
+                max: 500,
+                actual: 501
+            })
+        ));
     }
 
     #[test]
@@ -121,7 +146,7 @@ mod tests {
             minimal_email("a@example.com"),
             minimal_email("b@example.com"),
         ]);
-        assert!(batch.is_some());
+        assert!(batch.is_ok());
         assert_eq!(batch.unwrap().len(), 2);
     }
 

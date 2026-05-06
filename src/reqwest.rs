@@ -125,6 +125,10 @@ pub enum LettermintClientError {
 impl Client for LettermintClient {
     type Error = LettermintClientError;
 
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(name = "lettermint.http", skip_all, fields(url))
+    )]
     async fn execute(&self, mut req: Request<Bytes>) -> Result<Response<Bytes>, Self::Error> {
         req.headers_mut()
             .append("x-lettermint-token", self.api_token.as_str().try_into()?);
@@ -141,6 +145,9 @@ impl Client for LettermintClient {
             self.base_url.trim_end_matches('/'),
             path.trim_start_matches('/')
         );
+
+        #[cfg(feature = "tracing")]
+        tracing::Span::current().record("url", &url);
 
         *req.uri_mut() = url.parse()?;
 

@@ -140,6 +140,7 @@ pub struct SendEmailResponse {
 /// Status of an email.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum EmailStatus {
     Pending,
     Queued,
@@ -155,6 +156,8 @@ pub enum EmailStatus {
     Blocked,
     PolicyRejected,
     Unsubscribed,
+    #[serde(other)]
+    Unknown,
 }
 
 impl std::fmt::Display for EmailStatus {
@@ -174,6 +177,7 @@ impl std::fmt::Display for EmailStatus {
             Self::Blocked => write!(f, "blocked"),
             Self::PolicyRejected => write!(f, "policy_rejected"),
             Self::Unsubscribed => write!(f, "unsubscribed"),
+            Self::Unknown => write!(f, "unknown"),
         }
     }
 }
@@ -278,6 +282,14 @@ mod tests {
         let resp: SendEmailResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.message_id, "abc-123");
         assert_eq!(resp.status, EmailStatus::Queued);
+    }
+
+    #[test]
+    fn deserialize_unknown_status() {
+        let json = r#"{"message_id":"abc-123","status":"deferred"}"#;
+        let resp: SendEmailResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.message_id, "abc-123");
+        assert_eq!(resp.status, EmailStatus::Unknown);
     }
 
     #[test]
