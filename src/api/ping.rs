@@ -17,6 +17,7 @@ pub struct EmptyBody;
 /// Response from the ping endpoint.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PingResponse {
+    /// API response body, typically `"pong"`.
     pub message: String,
 }
 

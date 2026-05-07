@@ -17,7 +17,7 @@ use typed_builder::TypedBuilder;
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, TypedBuilder)]
 pub struct SendEmailRequest {
-    /// Sender email address. RFC 5322 format supported: "Name <email>" or "email".
+    /// Sender email address. RFC 5322 format supported: `Name <email>` or `email`.
     #[builder(setter(into))]
     pub from: String,
 
@@ -133,7 +133,9 @@ impl Attachment {
 /// Response from sending an email.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SendEmailResponse {
+    /// Server-assigned message identifier.
     pub message_id: String,
+    /// Initial status returned by the API (typically [`EmailStatus::Queued`]).
     pub status: EmailStatus,
 }
 
@@ -142,20 +144,35 @@ pub struct SendEmailResponse {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum EmailStatus {
+    /// Accepted by the API but not yet enqueued for sending.
     Pending,
+    /// Sitting in the outbound queue, awaiting a worker.
     Queued,
+    /// Recipient is on a suppression list; the message will not be sent.
     Suppressed,
+    /// Picked up by a worker and handed to the upstream MTA.
     Processed,
+    /// Confirmed delivered to the recipient's mail server.
     Delivered,
+    /// Recipient opened the message (requires open tracking).
     Opened,
+    /// Recipient clicked a tracked link.
     Clicked,
+    /// Temporary delivery failure; may be retried.
     SoftBounced,
+    /// Permanent delivery failure; will not be retried.
     HardBounced,
+    /// Recipient marked the message as spam.
     SpamComplaint,
+    /// Sending failed for an internal reason (not a recipient bounce).
     Failed,
+    /// Blocked by the recipient mail server before delivery.
     Blocked,
+    /// Rejected by Lettermint policy (e.g., disallowed content or domain).
     PolicyRejected,
+    /// Recipient unsubscribed.
     Unsubscribed,
+    /// Forward-compatibility catch-all for any status the server may add later.
     #[serde(other)]
     Unknown,
 }

@@ -43,15 +43,20 @@ pub enum QueryError<E>
 where
     E: Error + Send + Sync + 'static,
 {
+    /// Underlying HTTP client error (DNS, TLS, timeout, header build, ...).
     #[error("client error: {}", source)]
     Client { source: E },
 
+    /// The request body could not be serialized to JSON.
     #[error("failed to serialize request body: {}", source)]
     SerializeBody { source: serde_json::Error },
 
+    /// A successful response body could not be parsed as JSON into the
+    /// endpoint's [`Endpoint::Response`] type.
     #[error("could not parse JSON response: {}", source)]
     DeserializeResponse { source: serde_json::Error },
 
+    /// Failed to construct the HTTP request (e.g., invalid header value or URI).
     #[error("failed to build request: {}", source)]
     Body {
         #[from]
@@ -96,6 +101,7 @@ impl<E> QueryError<E>
 where
     E: Error + Send + Sync + 'static,
 {
+    /// Wrap an underlying client error in [`QueryError::Client`].
     pub fn client(source: E) -> Self {
         QueryError::Client { source }
     }
@@ -214,6 +220,9 @@ where
 /// A trait representing a client which can communicate with a Lettermint instance.
 pub trait Client {
     type Error: Error + Send + Sync + 'static;
+    /// Send the request and return the response. Implementors are responsible
+    /// for setting auth headers and resolving the relative URI to the API base
+    /// URL.
     fn execute(
         &self,
         req: Request<Bytes>,

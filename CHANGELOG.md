@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.1] - 2026-05-07
+
+### Added
+- Module-level docs for `api`, `api::email`, `webhook`, and the `reqwest` client
+- Expanded crate-level docs covering features, modules, and error handling
+- Doc comments on `EmailStatus` variants, `QueryError` variants, `WebhookError` variants, `LettermintClientError` variants, and other public fields
+
+### Fixed
+- Webhook doctest now compiles and exercises the verify path
 
 ## [0.3.0] - 2026-05-06
 

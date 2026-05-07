@@ -1,3 +1,16 @@
+//! Verify HMAC-SHA256 signatures on inbound Lettermint webhook deliveries.
+//!
+//! Lettermint signs each webhook with the shared secret you configured for the
+//! endpoint. The `X-Lettermint-Signature` header carries the signed timestamp
+//! and digest in the form `t=<unix_seconds>,v1=<hex_hmac_sha256>`. Verification
+//! re-computes the HMAC over `"{timestamp}.{raw_body}"` and rejects messages
+//! whose timestamp is more than 5 minutes off (configurable via
+//! [`Webhook::with_tolerance`]).
+//!
+//! Use [`Webhook::verify`] when you only need the parsed JSON body, or
+//! [`Webhook::verify_headers`] to also surface the event type, delivery
+//! timestamp, and retry attempt as a [`WebhookEvent`].
+
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use thiserror::Error;
@@ -22,9 +35,12 @@ pub enum WebhookError {
     #[error("timestamp outside tolerance window ({tolerance}s)")]
     TimestampTolerance { tolerance: u64 },
 
+    /// The signature was valid but the body was not parseable as JSON.
     #[error("invalid JSON payload: {0}")]
     JsonDecode(#[from] serde_json::Error),
 
+    /// The host clock is set before the Unix epoch, so we can't compare
+    /// timestamps. Almost always indicates a misconfigured machine.
     #[error("system clock is set before Unix epoch")]
     SystemClock,
 }
@@ -44,12 +60,14 @@ pub struct WebhookEvent {
 
 /// Webhook verifier for Lettermint webhook payloads.
 ///
-/// ```
+/// ```no_run
 /// # use lettermint::webhook::Webhook;
-/// let wh = Webhook::new("whsec_your_secret").unwrap();
-///
-/// // Verify using raw signature header
-/// // let payload = wh.verify(body, signature_header).unwrap();
+/// # fn handler(body: &str, signature_header: &str) -> Result<(), Box<dyn std::error::Error>> {
+/// let wh = Webhook::new("whsec_your_secret")?;
+/// let payload = wh.verify(body, signature_header)?;
+/// println!("verified event: {payload}");
+/// # Ok(())
+/// # }
 /// ```
 pub struct Webhook {
     secret: String,

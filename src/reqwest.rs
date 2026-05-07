@@ -1,3 +1,13 @@
+//! `reqwest`-backed implementation of [`crate::Client`].
+//!
+//! Gated behind the `reqwest` feature. Pair it with `reqwest-native-tls` for
+//! the OS-native TLS stack, or `reqwest-rustls` for `rustls`. No TLS backend is
+//! pulled in by default — pick one or supply your own
+//! [`reqwest::Client`] via [`LettermintClient::with_reqwest_client`].
+//!
+//! The default client uses a 30-second timeout and sets the
+//! `User-Agent: Lettermint/<version> (Rust)` header.
+
 use std::convert::TryInto;
 use std::time::Duration;
 
@@ -78,6 +88,7 @@ impl LettermintClient {
         }
     }
 
+    /// Convenience wrapper that calls [`Query::execute`] against this client.
     pub async fn execute_endpoint<T>(
         &self,
         request: T,
@@ -98,23 +109,28 @@ impl std::fmt::Debug for LettermintClient {
     }
 }
 
+/// Transport-level errors surfaced by [`LettermintClient`].
 #[derive(Error, Debug)]
 pub enum LettermintClientError {
+    /// The API token could not be encoded as an HTTP header value.
     #[error("error setting auth header: {}", source)]
     AuthError {
         #[from]
         source: http::header::InvalidHeaderValue,
     },
+    /// The underlying `reqwest` call failed (DNS, TLS, timeout, connection reset, ...).
     #[error("communication with lettermint: {}", source)]
     Communication {
         #[from]
         source: ::reqwest::Error,
     },
+    /// Constructing the `http::Response` from the reqwest response failed.
     #[error("http error: {}", source)]
     Http {
         #[from]
         source: http::Error,
     },
+    /// The composed request URL did not parse as a valid URI.
     #[error("invalid uri: {}", source)]
     InvalidUri {
         #[from]
