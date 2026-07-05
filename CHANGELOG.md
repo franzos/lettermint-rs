@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2] - 2026-07-05
+
+### Added
+- reqwest 0.12 support via `reqwest-012` features (0.13 remains the default)
+
+### Changed
+- reqwest majors are mutually exclusive: enabling both is a compile error
+
 ## [0.3.1] - 2026-05-07
 
 ### Added

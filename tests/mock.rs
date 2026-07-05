@@ -4,7 +4,8 @@
 //! exact header values, body structure, and error codes that aren't triggerable
 //! on demand (403, 429, 500, 502).
 //!
-//! Run with: `cargo test --test mock --all-features`
+//! Run with: `cargo test --test mock --features reqwest-rustls`
+//! (swap in `reqwest-012-rustls` to exercise the reqwest 0.12 backend).
 
 use std::collections::HashMap;
 

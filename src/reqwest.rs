@@ -11,6 +11,22 @@
 use std::convert::TryInto;
 use std::time::Duration;
 
+#[cfg(all(feature = "reqwest-012", feature = "reqwest-013"))]
+compile_error!(
+    "features `reqwest-012` and `reqwest-013` are mutually exclusive: enable exactly one reqwest backend"
+);
+
+/// The `reqwest` crate this build is compiled against: 0.13 (the default, also
+/// selected by the plain `reqwest` feature) or 0.12 (via `reqwest-012`).
+/// Enabling both majors is a compile error.
+#[cfg(all(feature = "reqwest-012", not(feature = "reqwest-013")))]
+pub use ::reqwest012 as backend;
+/// The `reqwest` crate this build is compiled against: 0.13 (the default, also
+/// selected by the plain `reqwest` feature) or 0.12 (via `reqwest-012`).
+/// Enabling both majors is a compile error.
+#[cfg(feature = "reqwest-013")]
+pub use ::reqwest013 as backend;
+
 use crate::{Client, Endpoint, LETTERMINT_API_URL, Query, QueryError};
 use bytes::Bytes;
 use http::{Request, Response};
@@ -34,8 +50,8 @@ const USER_AGENT: &str = concat!("Lettermint/", env!("CARGO_PKG_VERSION"), " (Ru
 ///
 /// With a pre-configured reqwest client:
 /// ```
-/// # use lettermint::reqwest::LettermintClient;
-/// let http_client = reqwest::Client::builder()
+/// # use lettermint::reqwest::{LettermintClient, backend};
+/// let http_client = backend::Client::builder()
 ///     .timeout(std::time::Duration::from_secs(60))
 ///     .build()
 ///     .unwrap();
@@ -45,11 +61,11 @@ const USER_AGENT: &str = concat!("Lettermint/", env!("CARGO_PKG_VERSION"), " (Ru
 pub struct LettermintClient {
     api_token: String,
     base_url: String,
-    client: ::reqwest::Client,
+    client: backend::Client,
 }
 
-fn default_reqwest_client() -> ::reqwest::Client {
-    ::reqwest::Client::builder()
+fn default_reqwest_client() -> backend::Client {
+    backend::Client::builder()
         .timeout(DEFAULT_TIMEOUT)
         .user_agent(USER_AGENT)
         .build()
@@ -80,7 +96,7 @@ impl LettermintClient {
     /// Create a new client with a pre-configured `reqwest::Client`.
     ///
     /// Use this when you need custom timeouts, proxy settings, or TLS configuration.
-    pub fn with_reqwest_client(api_token: impl Into<String>, client: ::reqwest::Client) -> Self {
+    pub fn with_reqwest_client(api_token: impl Into<String>, client: backend::Client) -> Self {
         Self {
             api_token: api_token.into(),
             base_url: LETTERMINT_API_URL.into(),
@@ -122,7 +138,7 @@ pub enum LettermintClientError {
     #[error("communication with lettermint: {}", source)]
     Communication {
         #[from]
-        source: ::reqwest::Error,
+        source: backend::Error,
     },
     /// Constructing the `http::Response` from the reqwest response failed.
     #[error("http error: {}", source)]
@@ -167,7 +183,7 @@ impl Client for LettermintClient {
 
         *req.uri_mut() = url.parse()?;
 
-        let reqwest_req: ::reqwest::Request = req.try_into()?;
+        let reqwest_req: backend::Request = req.try_into()?;
         let reqwest_rsp = self.client.execute(reqwest_req).await?;
 
         let mut rsp = Response::builder()

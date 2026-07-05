@@ -4,7 +4,7 @@
 //! and a verified sender address via `LETTERMINT_SENDER`.
 //!
 //! Run with:
-//!   LETTERMINT_API_TOKEN=your-token LETTERMINT_SENDER=you@yourdomain.com cargo test --test integration --all-features -- --ignored
+//!   LETTERMINT_API_TOKEN=your-token LETTERMINT_SENDER=you@yourdomain.com cargo test --test integration --features reqwest-rustls -- --ignored
 //!
 //! Lettermint provides test addresses at @testing.lettermint.co that don't count
 //! toward quotas or affect bounce/complaint rates.

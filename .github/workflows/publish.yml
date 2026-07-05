@@ -16,8 +16,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
 
-      - name: Run tests
-        run: cargo test --all-features
+      - name: Run tests (reqwest 0.13)
+        run: cargo test --no-default-features --features reqwest-013-rustls,tracing
+
+      - name: Run tests (reqwest 0.12)
+        run: cargo test --no-default-features --features reqwest-012-rustls,tracing
 
       - name: Publish to crates.io
         uses: katyo/publish-crates@02cc2f1ad653fb25c7d1ff9eb590a8a50d06186b # v2

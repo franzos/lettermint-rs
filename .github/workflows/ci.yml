@@ -15,20 +15,32 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - reqwest-013-rustls,tracing
+          - reqwest-013-native-tls,tracing
+          - reqwest-012-rustls,tracing
+          - reqwest-012-native-tls,tracing
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           components: clippy
-      - run: cargo check --all-features
-      - run: cargo clippy --all-features --all-targets -- -D warnings
+      - run: cargo check --no-default-features --features ${{ matrix.features }}
+      - run: cargo clippy --no-default-features --features ${{ matrix.features }} --all-targets -- -D warnings
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - reqwest-013-rustls,tracing
+          - reqwest-012-rustls,tracing
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - run: cargo test --all-features
+      - run: cargo test --no-default-features --features ${{ matrix.features }}
 
   fmt:
     runs-on: ubuntu-latest

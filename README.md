@@ -169,11 +169,25 @@ match req.execute(&client).await {
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `reqwest` | no | reqwest HTTP client (no TLS) |
-| `reqwest-native-tls` | no | reqwest with native TLS |
-| `reqwest-rustls` | no | reqwest with rustls TLS |
+| `reqwest` | no | reqwest 0.13 HTTP client (no TLS) |
+| `reqwest-native-tls` | no | reqwest 0.13 with native TLS |
+| `reqwest-rustls` | no | reqwest 0.13 with rustls TLS |
+| `reqwest-012` | no | reqwest 0.12 HTTP client (no TLS) |
+| `reqwest-012-native-tls` | no | reqwest 0.12 with native TLS |
+| `reqwest-012-rustls` | no | reqwest 0.12 with rustls TLS |
 
-To use your own HTTP client, implement the `Client` trait and skip the reqwest features entirely — useful if you need a different reqwest version, or a different HTTP client like `ureq` or `hyper`.
+The plain `reqwest` feature (and its two TLS variants) tracks the latest reqwest, currently 0.13. To use your own HTTP client, implement the `Client` trait and skip the reqwest features entirely — useful if you need a different HTTP client like `ureq` or `hyper`.
+
+### Using reqwest 0.12
+
+The bundled client supports both reqwest majors. Enable the `reqwest-012` feature (with `reqwest-012-native-tls` or `reqwest-012-rustls` for a TLS backend) to build `LettermintClient` against reqwest 0.12 instead of 0.13:
+
+```toml
+[dependencies]
+lettermint = { version = "0.3", default-features = false, features = ["reqwest-012-rustls"] }
+```
+
+The two majors are mutually exclusive: enabling a `reqwest-012*` feature together with `reqwest`, `reqwest-rustls`, or any other 0.13 feature is a compile error. The client's own `reqwest::backend` re-export points at whichever version you selected, so you never name the version directly. If you'd rather bring your own client entirely, implement `Client` as shown below (it works unchanged against either version, since both build on `http`/`bytes` v1).
 
 ### Custom HTTP client example
 
@@ -222,10 +236,11 @@ impl Client for MyClient {
 
 ## Testing
 
-Unit tests:
+Unit tests. The two reqwest majors are mutually exclusive, so test each backend separately (`--all-features` does not compile):
 
 ```sh
-cargo test --all-features
+cargo test --no-default-features --features reqwest-013-rustls
+cargo test --no-default-features --features reqwest-012-rustls
 ```
 
 ### Test email addresses
@@ -255,7 +270,7 @@ Integration tests hit the live Lettermint API using test addresses that don't co
 ```sh
 LETTERMINT_API_TOKEN=your-token \
 LETTERMINT_SENDER=you@yourdomain.com \
-cargo test --test integration --all-features -- --ignored
+cargo test --test integration --no-default-features --features reqwest-013-rustls -- --ignored
 ```
 
 ## License

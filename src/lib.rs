@@ -27,10 +27,16 @@
 //! # Features
 //!
 //! - `reqwest` — enables [`crate::reqwest::LettermintClient`], a ready-made
-//!   [`Client`] backed by the `reqwest` HTTP crate. No TLS backend is selected
-//!   by default; pair it with one of the two below.
+//!   [`Client`] backed by the `reqwest` HTTP crate (defaults to reqwest 0.13).
+//!   No TLS backend is selected by default; pair it with one of the TLS
+//!   features below.
 //! - `reqwest-native-tls` — enables `reqwest` with the OS-native TLS stack.
 //! - `reqwest-rustls` — enables `reqwest` with `rustls`.
+//! - `reqwest-012` / `reqwest-013` — pin a specific reqwest major. The plain
+//!   `reqwest` feature and the two TLS aliases target 0.13; enable
+//!   `reqwest-012` (with `reqwest-012-native-tls` / `reqwest-012-rustls`) to
+//!   build against reqwest 0.12 instead. The two majors are mutually
+//!   exclusive: enabling both is a compile error.
 //! - `tracing` — emits `tracing` spans/events around requests and webhook
 //!   verification.
 //!
@@ -62,5 +68,5 @@ pub mod webhook;
 
 pub use client::*;
 
-#[cfg(feature = "reqwest")]
+#[cfg(any(feature = "reqwest-012", feature = "reqwest-013"))]
 pub mod reqwest;
